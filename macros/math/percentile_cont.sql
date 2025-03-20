@@ -16,3 +16,13 @@
     percentile({{ field }}, {{ quantile }})
     over({%- if partition %}partition by {{ partition }}{% endif -%})
 {% endmacro %}
+
+{% macro maxcompute__quantile(field, quantile, partition) -%}
+    {%- if partition != None %}
+    {{ exceptions.warn(
+            "partition options are not supported for dbt-maxcompute"
+            ~ "and are being ignored."
+    ) }}
+    {% endif %}
+    percentile({{ field }}, {{ quantile }})
+{% endmacro %}

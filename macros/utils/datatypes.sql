@@ -19,6 +19,10 @@
     timestamp(3)
 {%- endmacro %}
 
+{% macro maxcompute__type_timestamp() -%}
+    {{ dbt.type_timestamp() }}
+{%- endmacro %}
+
 {# datetime  -------------------------------------------------     #}
 
 {% macro type_datetime() -%}
@@ -48,4 +52,8 @@
 
 {% macro trino__type_datetime() -%}
     timestamp(3)
+{%- endmacro %}
+
+{% macro maxcompute__type_datetime() -%}
+    {{ dbt.type_timestamp() }}
 {%- endmacro %}
