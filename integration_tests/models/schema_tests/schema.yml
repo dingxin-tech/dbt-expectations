@@ -443,16 +443,16 @@ models:
           group_by: [idx]
       - dbt_expectations.equal_expression:
           expression: sum(col_numeric_a)
-          compare_expression: sum(col_numeric_a * .5)
+          compare_expression: sum(col_numeric_a * 0.5)
           compare_model: ref("data_test")
           group_by: [idx]
-          tolerance_percent: .5
+          tolerance_percent: 0.5
       - dbt_expectations.expect_table_aggregation_to_equal_other_table:
           expression: sum(col_numeric_a)
-          compare_expression: sum(col_numeric_a * .99)
+          compare_expression: sum(col_numeric_a * 0.99)
           compare_model: ref("data_test")
           group_by: [idx]
-          tolerance_percent: .95
+          tolerance_percent: 0.95
       - dbt_expectations.expect_column_pair_values_to_be_in_set:
           column_A: col_numeric_a
           column_B: col_numeric_b

@@ -127,7 +127,7 @@ total_row_counts as (
     from
         latest_grouped_timestamps
     {% if group_by -%}
-      {{ group_by | join(",") }}
+      group by {{ group_by | join(",") }}
     {%- endif %}
 
 
