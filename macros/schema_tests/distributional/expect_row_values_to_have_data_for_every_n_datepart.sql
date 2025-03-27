@@ -275,3 +275,4 @@ where row_cnt = 0
   and {{ exclusion_condition }}
 {% endif %}
 {%- endtest -%}
+
