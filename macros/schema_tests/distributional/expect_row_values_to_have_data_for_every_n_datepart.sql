@@ -13,7 +13,7 @@
     }}
 {%- endtest %}
 
-{%- test default__expect_row_values_to_have_data_for_every_n_datepart(model,
+{%- macro default__expect_row_values_to_have_data_for_every_n_datepart(model,
                                                             date_col,
                                                             date_part="day",
                                                             interval=None,
@@ -142,9 +142,9 @@ where row_cnt = 0
 {% if exclusion_condition %}
   and {{ exclusion_condition }}
 {% endif %}
-{%- endtest -%}
+{%- endmacro -%}
 
-{%- test maxcompute__expect_row_values_to_have_data_for_every_n_datepart(model,
+{%- macro maxcompute__expect_row_values_to_have_data_for_every_n_datepart(model,
                                                             date_col,
                                                             date_part="day",
                                                             interval=None,
@@ -209,10 +209,8 @@ with base_dates as (
             This modulo operation produces the following remainders: [0, 1, 0, 1, 0, ...]
             Filtering the spine only where this remainder == 0 will return a spine with every other day as desired, i.e. [2020-01-01, 2020-01-03, 2020-01-05, ...]
     #}
-    where mod(
-            cast({{ dbt.datediff("'" ~ start_date ~ "'", 'date_' ~ date_part, date_part) }} as {{ dbt.type_int() }}),
-            cast({{interval}} as {{ dbt.type_int() }})
-        ) = 0
+    where (cast({{ dbt.datediff("'" ~ start_date ~ "'", 'date_' ~ date_part, date_part) }} as {{ dbt.type_int() }})) %
+            cast({{interval}} as {{ dbt.type_int() }})) = 0
     {% endif %}
 
 ),
@@ -274,5 +272,5 @@ where row_cnt = 0
 {% if exclusion_condition %}
   and {{ exclusion_condition }}
 {% endif %}
-{%- endtest -%}
+{%- endmacro -%}
 
