@@ -1,0 +1,34 @@
+version: 2
+models:
+  - name: timeseries_data
+    tests:
+      - dbt_expectations.expect_row_values_to_have_data_for_every_n_datepart:
+          date_col: date_day
+          date_part: day
+      - dbt_expectations.expect_row_values_to_have_data_for_every_n_datepart:
+          date_col: date_day
+          date_part: day
+          exclusion_condition: not(date_day = cast('2021-10-19' as date))
+      - dbt_expectations.expect_row_values_to_have_data_for_every_n_datepart:
+          date_col: date_day
+          date_part: day
+          test_start_date: '{{ modules.datetime.date.today() - modules.datetime.timedelta(365) }}'
+          test_end_date: '{{ modules.datetime.date.today() - modules.datetime.timedelta(2) }}'
+
+  - name: timeseries_data_extended
+    tests:
+      - dbt_expectations.expect_table_columns_to_match_ordered_list:
+          column_list: ["date_day", "row_value", "row_value_log"]
+      - dbt_expectations.expect_row_values_to_have_data_for_every_n_datepart:
+          date_col: date_day
+          date_part: day
+      - dbt_expectations.expect_row_values_to_have_data_for_every_n_datepart:
+          date_col: date_day
+          date_part: day
+          interval: 7
+
+  - name: timeseries_hourly_data_extended
+    tests:
+      - dbt_expectations.expect_row_values_to_have_data_for_every_n_datepart:
+          date_col: date_hour
+          date_part: hour
