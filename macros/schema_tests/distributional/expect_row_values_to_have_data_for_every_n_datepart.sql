@@ -8,7 +8,7 @@
                                                             test_end_date=None) -%}
     {{
         adapter.dispatch('expect_row_values_to_have_data_for_every_n_datepart', 'dbt_expectations') (
-            date_col, date_part, interval, row_condition, exclusion_condition, test_start_date, test_end_date
+            model, date_col, date_part, interval, row_condition, exclusion_condition, test_start_date, test_end_date
         )
     }}
 {%- endtest %}
@@ -146,19 +146,18 @@ where row_cnt = 0
 
 {%- macro maxcompute__expect_row_values_to_have_data_for_every_n_datepart(model,
                                                             date_col,
-                                                            date_part="day",
-                                                            interval=None,
-                                                            row_condition=None,
-                                                            exclusion_condition=None,
-                                                            test_start_date=None,
-                                                            test_end_date=None) -%}
+                                                            date_part,
+                                                            interval,
+                                                            row_condition,
+                                                            exclusion_condition,
+                                                            test_start_date,
+                                                            test_end_date) -%}
 {% if not execute %}
     {{ return('') }}
 {% endif %}
 
 {% if not test_start_date or not test_end_date %}
     {% set sql %}
-
         select
             min(cast({{ date_col }} as date)) as start_{{ date_part }},
             max(cast({{ date_col }} as date)) as end_{{ date_part }}
@@ -166,27 +165,16 @@ where row_cnt = 0
         {% if row_condition %}
         where {{ row_condition }}
         {% endif %}
-
     {% endset %}
-
     {%- set dr = run_query(sql) -%}
-
     {%- set db_start_date = dr.columns[0].values()[0] -%}
     {%- set db_end_date = dr.columns[1].values()[0] -%}
-
-    {% if db_start_date is not string %}
-        {%- set db_start_date = db_start_date.strftime('%Y-%m-%d') -%}
-        {%- set db_end_date = db_end_date.strftime('%Y-%m-%d') -%}
-    {% endif %}
-
 {% endif %}
-
 {% if not test_start_date %}
 {% set start_date = db_start_date %}
 {% else %}
 {% set start_date = test_start_date %}
 {% endif %}
-
 
 {% if not test_end_date %}
 {% set end_date = db_end_date %}
@@ -209,8 +197,12 @@ with base_dates as (
             This modulo operation produces the following remainders: [0, 1, 0, 1, 0, ...]
             Filtering the spine only where this remainder == 0 will return a spine with every other day as desired, i.e. [2020-01-01, 2020-01-03, 2020-01-05, ...]
     #}
-    where (cast({{ dbt.datediff("'" ~ start_date ~ "'", 'date_' ~ date_part, date_part) }} as {{ dbt.type_int() }})) %
-            cast({{interval}} as {{ dbt.type_int() }})) = 0
+
+    where
+         cast({{ dbt.datediff("cast('" ~ start_date ~ "' as timestamp)", "cast(date_" ~ date_part ~ " as timestamp)", date_part) }} as {{ dbt.type_int() }})
+         %
+         cast({{interval}} as {{ dbt.type_int() }})
+         = 0
     {% endif %}
 
 ),
@@ -233,8 +225,7 @@ model_data as (
         #}
         {{ dbt.dateadd(
             date_part,
-            "
-             cast(" ~ dbt.datediff("'" ~ start_date ~ "'", date_col, date_part) ~ " as " ~ dbt.type_int() ~ " ),
+            "cast(" ~ dbt.datediff("cast('" ~ start_date ~ "' as timestamp)", "cast(" ~ date_col ~ " as timestamp)", date_part) ~ " as " ~ dbt.type_int() ~ " )
              %
              cast(" ~ interval ~ " as  " ~ dbt.type_int() ~ " )
              * (-1)",
@@ -251,11 +242,9 @@ model_data as (
     {% endif %}
     group by
         date_{{date_part}}
-
 ),
 
 final as (
-
     select
         cast(d.date_{{ date_part }} as {{ dbt_expectations.type_datetime() }}) as date_{{ date_part }},
         case when f.date_{{ date_part }} is null then true else false end as is_missing,
@@ -273,4 +262,3 @@ where row_cnt = 0
   and {{ exclusion_condition }}
 {% endif %}
 {%- endmacro -%}
-
