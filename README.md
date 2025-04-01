@@ -1,4 +1,4 @@
-## Note: This package is no longer actively supported. 
+## Community-maintained fork of the original [dbt-expectations](https://github.com/calogica/dbt-expectations) package with extended support for [dbt-maxcompute](https://github.com/aliyun/dbt-maxcompute) (dbt adapter of Alibaba Cloud MaxCompute).
 <hr/>
 <h1 align="center">dbt-expectations</h1>
 <p align="center">
@@ -29,9 +29,8 @@ Include in `packages.yml`
 
 ```yaml
 packages:
-  - package: calogica/dbt_expectations
-    version: [">=0.10.0", "<0.11.0"]
-    # <see https://github.com/calogica/dbt-expectations/releases/latest> for the latest version tag
+  - git: "https://github.com/dingxin-tech/dbt-expectations.git"
+    revision: main
 ```
 
 This package supports:
@@ -42,6 +41,7 @@ This package supports:
 * DuckDB
 * Spark (experimental)
 * Trino
+* MaxCompute
 
 For latest release, see [https://github.com/calogica/dbt-expectations/releases](https://github.com/calogica/dbt-expectations/releases)
 
