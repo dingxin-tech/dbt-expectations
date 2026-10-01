@@ -1,0 +1,32 @@
+name: deps-lock-check
+
+# Reproducibility gate for this package's dependencies:
+#   * no branch refs / version ranges in packages.yml (they silently resolve elsewhere)
+#   * package-lock.yml is in sync with packages.yml and still matches the remote tags
+#   * a clean `dbt deps` reproduces the committed lock byte for byte
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pins:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dbt-core (provides PyYAML and `dbt deps`)
+        run: pip install "dbt-core==1.11.2"
+
+      - name: Dependency pins are immutable refs
+        run: python dev-tools/check_package_pins.py --project-dir .
+
+      - name: A clean `dbt deps` reproduces package-lock.yml
+        run: |
+          rm -rf dbt_packages package-lock.yml
+          dbt deps --project-dir .
+          git diff --exit-code package-lock.yml
