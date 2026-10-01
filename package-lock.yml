@@ -1,0 +1,5 @@
+packages:
+  - git: https://github.com/dingxin-tech/dbt-date.git
+    name: dbt_date
+    revision: 80b5dca27d9d74ee7ac59778b069d69177d2b8c2
+sha1_hash: 9a436bb8fa3a94c7502e4782d3959ccb72b334cf
