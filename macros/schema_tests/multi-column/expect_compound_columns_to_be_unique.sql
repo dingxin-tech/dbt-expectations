@@ -15,7 +15,7 @@
 {% elif quote_columns %}
     {%- set columns=[] %}
         {% for column in column_list -%}
-            {% set columns = columns.append( adapter.quote(column) ) %}
+            {% do columns.append( adapter.quote(column) ) %}
         {%- endfor %}
 {% else %}
     {{ exceptions.raise_compiler_error(
