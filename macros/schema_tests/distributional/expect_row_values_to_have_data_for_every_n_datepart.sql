@@ -182,6 +182,18 @@ where row_cnt = 0
 {% set end_date = test_end_date %}
 {% endif %}
 
+{#
+  MaxCompute 的 `cast('<仅日期串>' as timestamp)` 不报错、返回 NULL（服务端实测：
+  `cast('2026-01-01' as timestamp)` → NULL，`cast('2026-01-01 00:00:00' as timestamp)` → 正常，
+  `cast(cast('2026-01-01' as date) as timestamp)` → 2026-01-01 00:00:00）。
+  start_date 来自上面 run_query 的 date 列（或调用方传入的 'YYYY-MM-DD'），直接当 timestamp 解析时
+  拿到 NULL，NULL 会一路传染：base_dates 的谓词恒 NULL → spine 一天都不剩；model_data 的 dateadd
+  增量恒 NULL → 整个分组塌成一行 date_day=NULL；final 左连空 spine → 0 行 → 末段 `where row_cnt = 0`
+  永远返回 0 行 → 这个数据完整性测试恒判通过，抓不到任何缺日期（假阴性）。
+  这里先按 timestamp 解析（带时间的入参保持原语义），落空时退回按 date 解析再升 timestamp（补齐 00:00:00）。
+#}
+{%- set start_date_ts = "coalesce(cast('" ~ start_date ~ "' as timestamp), cast(cast('" ~ start_date ~ "' as date) as timestamp))" -%}
+
 with base_dates as (
 
     {{ dbt_date.get_base_dates(start_date=start_date, end_date=end_date, datepart=date_part) }}
@@ -199,7 +211,7 @@ with base_dates as (
     #}
 
     where
-         cast({{ dbt.datediff("cast('" ~ start_date ~ "' as timestamp)", "cast(date_" ~ date_part ~ " as timestamp)", date_part) }} as {{ dbt.type_int() }})
+         cast({{ dbt.datediff(start_date_ts, "cast(date_" ~ date_part ~ " as timestamp)", date_part) }} as {{ dbt.type_int() }})
          %
          cast({{interval}} as {{ dbt.type_int() }})
          = 0
@@ -225,7 +237,7 @@ model_data as (
         #}
         {{ dbt.dateadd(
             date_part,
-            "cast(" ~ dbt.datediff("cast('" ~ start_date ~ "' as timestamp)", "cast(" ~ date_col ~ " as timestamp)", date_part) ~ " as " ~ dbt.type_int() ~ " )
+            "cast(" ~ dbt.datediff(start_date_ts, "cast(" ~ date_col ~ " as timestamp)", date_part) ~ " as " ~ dbt.type_int() ~ " )
              %
              cast(" ~ interval ~ " as  " ~ dbt.type_int() ~ " )
              * (-1)",
