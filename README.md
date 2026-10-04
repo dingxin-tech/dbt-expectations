@@ -1220,3 +1220,62 @@ To run the tests:
 2. Then, from within the `integration_tests` folder, run `dbt build` to run the test models in `integration_tests/models/schema_tests/` and run the tests specified in `integration_tests/models/schema_tests/schema.yml`
 
 <img src="https://raw.githubusercontent.com/calogica/dbt-expectations/main/expectations.gif"/>
+
+
+## Dependency pinning
+
+`packages.yml` pins **dbt-date** to tag `0.10.1-mc.1`:
+
+```yaml
+  - git: "https://github.com/dingxin-tech/dbt-date.git"
+    revision: 0.10.1-mc.1
+```
+
+`package-lock.yml` in this directory records what that resolved to:
+
+    dbt-date -> 80b5dca27d9d74ee7ac59778b069d69177d2b8c2
+
+Before this change the dependency floated on a branch (`revision: main`), so two clean `dbt deps` runs on different
+days could install different dbt-date source, and nothing in the project said which one you got.
+dbt-date `0.10.1-mc.1` is the revision the MaxCompute compatibility run of 2026-09-25 executed tests against.
+
+Check it yourself, in a clean checkout:
+
+```bash
+python dev-tools/check_package_pins.py      # R1-R4: immutable refs, lock in sync, tags unmoved
+rm -rf dbt_packages package-lock.yml && dbt deps && git diff --exit-code package-lock.yml
+```
+
+### Installing this package reproducibly
+
+```yaml
+# your_project/packages.yml
+packages:
+  - git: "https://github.com/dingxin-tech/dbt-expectations.git"
+    revision: 0.10.4-mc.1
+```
+
+Pin tag in your own project, then commit the `package-lock.yml` that `dbt deps` writes there: it holds the full commit sha, so a rebuild years from now installs this same code.
+
+```bash
+rm -rf dbt_packages package-lock.yml && dbt deps   # first install: resolves, installs, writes the lock
+dbt deps                                           # later runs: install exactly what the committed lock records
+dbt deps --lock                                    # regenerate the lock file only - it installs nothing
+```
+
+`--lock` is not an install command. On dbt-core 1.11 `dbt deps --help` describes it as
+"Generate the package-lock.yml file without install the packages." - it writes
+`package-lock.yml` and stops there. Reproducing an install is plain `dbt deps`: with a
+committed lock and an unchanged `packages.yml`, that is what reads the lock as its source
+of truth, and it is what a rebuild months later runs.
+
+
+### Upgrading a dependency
+
+1. Read the current MaxCompute support level first: the *Compatible dbt Packages* table in the
+   [dbt-maxcompute README](https://github.com/aliyun/dbt-maxcompute).
+2. Change `revision:` (or `version:`) to a tag or a full 40-char commit sha. Never a branch name -
+   `.github/workflows/deps-lock-check.yml` fails on that.
+3. Regenerate from scratch: `rm -rf dbt_packages package-lock.yml && dbt deps`, then
+   `python dev-tools/check_package_pins.py` and a real `dbt build` against a three-tier MaxCompute project.
+4. Commit `packages.yml` and `package-lock.yml` together so a revert is atomic.
