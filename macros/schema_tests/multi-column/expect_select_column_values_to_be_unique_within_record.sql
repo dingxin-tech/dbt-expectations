@@ -19,7 +19,7 @@
 {% elif quote_columns %}
     {%- set columns=[] %}
         {% for column in column_list -%}
-            {% set columns = columns.append( adapter.quote(column) ) %}
+            {% do columns.append( adapter.quote(column) ) %}
         {%- endfor %}
 {% else %}
     {{ exceptions.raise_compiler_error(
@@ -65,7 +65,7 @@ validation_errors as (
         row_index,
         count(distinct column_value) as column_values
     from unpivot_columns
-    group by 1
+    group by row_index
     having count(distinct column_value) < {{ columns | length }}
 
 )

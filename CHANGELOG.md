@@ -1,3 +1,20 @@
+# dbt-expectations 0.10.10-mc.1（MaxCompute 分支：对齐上游）
+
+## 上游事实（2026-10-02 现查）
+* 本包上游已从 `calogica/dbt-expectations` 迁到 `metaplane/dbt-expectations`：calogica 的 `0.10.4` 是 metaplane `0.10.10` 的祖先（`git merge-base --is-ancestor` 成立），calogica 最后推送 2024-12-16，metaplane 最新发行 0.10.10（2025-12-02）、main 至 `991651f`（2026-05-17）。许可证三处一致（Apache-2.0，`LICENSE` 同哈希）。
+* 宏文件数不变（78 个 `.sql`）：0.10.4 → 0.10.10 只改 3 个宏、共 6 行；0.10.10 → main 再改 2 个宏、共 4 行。
+
+## 本分支移植的 5 个宏（取 metaplane main@991651f）
+* `expect_column_proportion_of_unique_values_to_be_between`：加除零保护（空模型上 `count(distinct)/count()` 不再走到 0/0）。
+* `expect_compound_columns_to_be_unique`、`expect_select_column_values_to_be_unique_within_record`：`{% set columns = columns.append(...) %}` 的返回值是 None，会让 `quote_columns=true` 路径拿到空列表；改为 `{% do columns.append(...) %}`。
+* `expect_column_values_to_have_consistent_casing`：`group by 1` 改为 `group by lower(distinct_values)`，按大小写无关的键分组。
+* `expect_column_to_exist`：列序比较的布尔字面量改为 1/0。
+
+## 保持不变
+* 6 个 MaxCompute dispatch 宏（`percentile_cont`/`quantile`、`expect_column_values_to_be_within_n_moving_stdevs`、`expect_column_values_to_be_within_n_stdevs`、`expect_row_values_to_have_data_for_every_n_datepart`、`expect_grouped_row_values_to_have_recent_data`、`datatypes`）签名与行为不变，与上面 5 个文件无交集。
+* `packages.yml` 里 dbt-date 的浮动 `revision: main` 与 `dbt_project.yml` 的 `version: 0.6.0` 不在本次改动内：依赖锁与版本口径归 87169648（已开 PR `dingxin-tech/dbt-expectations#1`），避免两条 PR 改同一处。
+* 未创建、未推送任何 tag；`0.10.10-mc.1` 只是本条变更日志的标题，发布口径由维护者决定。
+
 # dbt-expectations v0.10.4
 ## New Features
 * Adds optional `step` param to expect_column_values_to_be_{in,de}creasing by @vitorbaptista in https://github.com/calogica/dbt-expectations/pull/316
