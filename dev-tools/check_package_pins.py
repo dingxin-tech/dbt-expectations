@@ -37,21 +37,28 @@ import sys
 
 try:
     import yaml
-except ImportError:                                    # pragma: no cover
-    sys.stderr.write("PyYAML is required (it ships with dbt-core): pip install pyyaml\n")
+except ImportError:  # pragma: no cover
+    sys.stderr.write(
+        "PyYAML is required (it ships with dbt-core): pip install pyyaml\n"
+    )
     raise SystemExit(2)
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-PEELED = {}                                            # url -> {ref: sha}
+PEELED = {}  # url -> {ref: sha}
 
 
 def remote_refs(url: str) -> dict:
     """All refs of a git remote, peeled tags folded in. Cached per url."""
     if url not in PEELED:
         try:
-            out = subprocess.run(["git", "ls-remote", url], capture_output=True, text=True,
-                                 timeout=120, check=True).stdout
-        except Exception as exc:                        # noqa: BLE001
+            out = subprocess.run(
+                ["git", "ls-remote", url],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=True,
+            ).stdout
+        except Exception as exc:  # noqa: BLE001
             sys.stderr.write(f"WARN cannot list remote refs for {url}: {exc}\n")
             out = ""
         refs = {}
@@ -59,7 +66,7 @@ def remote_refs(url: str) -> dict:
             sha, _, ref = line.partition("\t")
             if ref.endswith("^{}"):
                 base = ref[:-3]
-                refs[base] = sha                        # annotated tag -> commit
+                refs[base] = sha  # annotated tag -> commit
             elif ref not in refs or not ref.startswith("refs/tags/"):
                 refs[ref] = sha
         PEELED[url] = refs
@@ -77,7 +84,7 @@ def classify_git(revision: str, url: str):
         return "pinned-tag", refs[f"refs/tags/{revision}"]
     if is_branch:
         return "floating-branch", refs[f"refs/heads/{revision}"]
-    if is_tag:                                          # a tag AND a branch with the same name
+    if is_tag:  # a tag AND a branch with the same name
         return "ambiguous-ref", refs[f"refs/tags/{revision}"]
     return "unknown-ref", ""
 
@@ -94,7 +101,7 @@ def transitive_identities(project_dir: str):
             continue
         try:
             body = yaml.safe_load(child.read_text()) or {}
-        except Exception:                                    # noqa: BLE001
+        except Exception:  # noqa: BLE001
             continue
         for entry in body.get("packages") or []:
             found.add(dep_identity(entry))
@@ -148,28 +155,39 @@ def main() -> int:
 
     for entry in deps:
         checked += 1
-        where = f"{os.path.relpath(pkg_path, os.getcwd()) or '.'}: {dep_identity(entry)}"
+        where = (
+            f"{os.path.relpath(pkg_path, os.getcwd()) or '.'}: {dep_identity(entry)}"
+        )
         if "git" in entry:
             kind, sha = classify_git(str(entry.get("revision", "")), entry["git"])
             if kind == "floating-branch":
-                problems.append(f"R1 {where} uses branch '{entry['revision']}' "
-                                f"(currently {sha[:9]}) -> pin a tag or a full commit sha")
+                problems.append(
+                    f"R1 {where} uses branch '{entry['revision']}' "
+                    f"(currently {sha[:9]}) -> pin a tag or a full commit sha"
+                )
             elif kind in ("unknown-ref", "ambiguous-ref"):
-                problems.append(f"R1 {where} revision '{entry.get('revision')}' is neither a "
-                                f"40-char sha nor a unique remote tag ({kind})")
+                problems.append(
+                    f"R1 {where} revision '{entry.get('revision')}' is neither a "
+                    f"40-char sha nor a unique remote tag ({kind})"
+                )
         elif "package" in entry:
             ver = entry.get("version")
-            if not isinstance(ver, str) or not re.match(r"^[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9.\-]*$",
-                                                        ver.strip()):
-                problems.append(f"R2 {where} version {ver!r} is a range or template "
-                                f"-> pin one exact version")
+            if not isinstance(ver, str) or not re.match(
+                r"^[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9.\-]*$", ver.strip()
+            ):
+                problems.append(
+                    f"R2 {where} version {ver!r} is a range or template "
+                    f"-> pin one exact version"
+                )
         # local deps are reproducible by definition.
 
     declared = [dep_identity(e) for e in deps]
     if lock is None:
         if any(d[0] != "local" for d in declared):
-            problems.append(f"R3 no package-lock.yml next to {os.path.relpath(pkg_path)} "
-                            f"-> run `dbt deps` and commit the lock")
+            problems.append(
+                f"R3 no package-lock.yml next to {os.path.relpath(pkg_path)} "
+                f"-> run `dbt deps` and commit the lock"
+            )
     else:
         lock_entries = lock.get("packages") or []
         locked = [lock_identity(e) for e in lock_entries]
@@ -177,29 +195,41 @@ def main() -> int:
             if want[0] == "local":
                 continue
             if want not in locked:
-                problems.append(f"R3 {want} is declared in packages.yml but missing from "
-                                f"package-lock.yml -> regenerate the lock")
+                problems.append(
+                    f"R3 {want} is declared in packages.yml but missing from "
+                    f"package-lock.yml -> regenerate the lock"
+                )
                 continue
-            if entry.get("name"):        # an explicitly declared install name must be honoured
+            if entry.get(
+                "name"
+            ):  # an explicitly declared install name must be honoured
                 lock_match = [e for e in lock_entries if lock_identity(e) == want]
                 if lock_match and lock_match[0].get("name") != entry["name"]:
-                    problems.append(f"R3 {want} declares name '{entry['name']}' but "
-                                    f"package-lock.yml records '{lock_match[0].get('name')}'")
+                    problems.append(
+                        f"R3 {want} declares name '{entry['name']}' but "
+                        f"package-lock.yml records '{lock_match[0].get('name')}'"
+                    )
         transitive, unknown_source = transitive_identities(args.project_dir)
         if transitive is None:
-            skipped.append("R4 (no dbt_packages/ on disk: a non-declared lock entry cannot be "
-                           "told apart from a stale one; the workflow's `dbt deps` diff covers it)")
+            skipped.append(
+                "R4 (no dbt_packages/ on disk: a non-declared lock entry cannot be "
+                "told apart from a stale one; the workflow's `dbt deps` diff covers it)"
+            )
         else:
             for have in locked:
                 if have not in declared and have not in transitive:
-                    problems.append(f"R4 {have} is in package-lock.yml, is not declared, and no "
-                                    f"installed package declares it -> regenerate the lock")
+                    problems.append(
+                        f"R4 {have} is in package-lock.yml, is not declared, and no "
+                        f"installed package declares it -> regenerate the lock"
+                    )
         for entry in lock_entries:
             if "git" in entry:
                 rev = str(entry.get("revision", ""))
                 if not SHA_RE.match(rev):
-                    problems.append(f"R3 lock entry {lock_identity(entry)} records a "
-                                    f"non-sha revision '{rev}' -> regenerate the lock")
+                    problems.append(
+                        f"R3 lock entry {lock_identity(entry)} records a "
+                        f"non-sha revision '{rev}' -> regenerate the lock"
+                    )
         # tag drift: the tag must still point at the sha the lock was built from
         for entry in deps:
             if "git" not in entry:
@@ -207,16 +237,25 @@ def main() -> int:
             kind, sha = classify_git(str(entry.get("revision", "")), entry["git"])
             if kind != "pinned-tag":
                 continue
-            match = [e for e in lock_entries
-                     if lock_identity(e) == dep_identity(entry) and SHA_RE.match(str(e.get("revision", "")))]
+            match = [
+                e
+                for e in lock_entries
+                if lock_identity(e) == dep_identity(entry)
+                and SHA_RE.match(str(e.get("revision", "")))
+            ]
             if match and match[0]["revision"] != sha:
-                problems.append(f"R3 tag '{entry['revision']}' now resolves to {sha[:9]}, "
-                                f"package-lock.yml says {match[0]['revision'][:9]} "
-                                f"-> the tag moved; pin the commit sha instead")
+                problems.append(
+                    f"R3 tag '{entry['revision']}' now resolves to {sha[:9]}, "
+                    f"package-lock.yml says {match[0]['revision'][:9]} "
+                    f"-> the tag moved, so pin the sha the lock "
+                    f"was built from"
+                )
 
-    print(f"checked {checked} declared dependencies in {os.path.relpath(pkg_path)} "
-          f"({'with' if lock is not None else 'without'} package-lock.yml), "
-          f"violations {len(problems)}")
+    print(
+        f"checked {checked} declared dependencies in {os.path.relpath(pkg_path)} "
+        f"({'with' if lock is not None else 'without'} package-lock.yml), "
+        f"violations {len(problems)}"
+    )
     for note in skipped:
         print("  SKIP " + note)
     for p in problems:
