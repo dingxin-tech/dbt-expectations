@@ -12,7 +12,7 @@
 
 ## 保持不变
 * 6 个 MaxCompute dispatch 宏（`percentile_cont`/`quantile`、`expect_column_values_to_be_within_n_moving_stdevs`、`expect_column_values_to_be_within_n_stdevs`、`expect_row_values_to_have_data_for_every_n_datepart`、`expect_grouped_row_values_to_have_recent_data`、`datatypes`）签名与行为不变，与上面 5 个文件无交集。
-* `packages.yml` 里 dbt-date 的浮动 `revision: main` 与 `dbt_project.yml` 的 `version: 0.6.0` 不在本次改动内：依赖锁与版本口径归 87169648（已开 PR `dingxin-tech/dbt-expectations#1`），避免两条 PR 改同一处。
+* `packages.yml` 里 dbt-date 的浮动 `revision: main` 与 `dbt_project.yml` 的 `version: 0.6.0` 不在本次改动内：依赖锁与版本口径由本仓 PR #1（`fix(deps): pin the dbt-date dependency and gate it in CI`）单独跟进，避免两条 PR 改同一处。
 * 未创建、未推送任何 tag；`0.10.10-mc.1` 只是本条变更日志的标题，发布口径由维护者决定。
 
 # dbt-expectations v0.10.4
