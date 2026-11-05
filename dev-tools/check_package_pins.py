@@ -24,7 +24,15 @@ Rules checked in the project directory (default: repo root, where `packages.yml`
 multi-adapter CI matrix, not what a MaxCompute user installs, and their getdbt version maps
 are selected by dbt minor version.
 
-Exit codes: 0 = clean, 1 = violations, 2 = the check could not run (bad input, no PyYAML).
+Exit codes: 0 = clean, 1 = violations, 2 = nothing could be decided (bad input, no PyYAML, or
+every non-sha ref was unverifiable because the git remote could not be reached).
+
+"Could not reach the remote" is deliberately **not** reported as an R1 violation. Observed
+2026-10-29 on a merged copy of this script: inside an environment where `git ls-remote
+https://github.com/...` cannot connect, a correctly pinned tag was reported as
+"neither a 40-char sha nor a unique remote tag" - a false violation that points a maintainer at a
+ref problem that does not exist. The rule stays fail-closed: such a run exits 2 and prints
+`UNVERIFIED`, it never exits 0 and never claims the pin is fine.
 """
 from __future__ import annotations
 
@@ -47,8 +55,12 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 PEELED = {}  # url -> {ref: sha}
 
 
-def remote_refs(url: str) -> dict:
-    """All refs of a git remote, peeled tags folded in. Cached per url."""
+def remote_refs(url: str):
+    """All refs of a git remote, peeled tags folded in. Cached per url.
+
+    Returns None when the remote could not be reached - the caller must then say "cannot verify",
+    never "violation" and never "clean".
+    """
     if url not in PEELED:
         try:
             out = subprocess.run(
@@ -60,7 +72,8 @@ def remote_refs(url: str) -> dict:
             ).stdout
         except Exception as exc:  # noqa: BLE001
             sys.stderr.write(f"WARN cannot list remote refs for {url}: {exc}\n")
-            out = ""
+            PEELED[url] = None
+            return None
         refs = {}
         for line in out.splitlines():
             sha, _, ref = line.partition("\t")
@@ -74,10 +87,16 @@ def remote_refs(url: str) -> dict:
 
 
 def classify_git(revision: str, url: str):
-    """-> (kind, detail). kind in pinned-sha / pinned-tag / floating-branch / unknown-ref."""
+    """-> (kind, detail).
+
+    kind: pinned-sha / pinned-tag / floating-branch / unknown-ref / cannot-verify.
+    `cannot-verify` means the remote was unreachable, i.e. this tool has no evidence either way.
+    """
     if SHA_RE.match(revision or ""):
         return "pinned-sha", revision
     refs = remote_refs(url) if url else {}
+    if refs is None:
+        return "cannot-verify", ""
     is_branch = f"refs/heads/{revision}" in refs
     is_tag = f"refs/tags/{revision}" in refs
     if is_tag and not is_branch:
@@ -151,7 +170,7 @@ def main() -> int:
     args = ap.parse_args()
 
     deps, lock, pkg_path, lock_path = read_project(args.project_dir)
-    problems, checked, skipped = [], 0, []
+    problems, checked, skipped, unverified = [], 0, [], []
 
     for entry in deps:
         checked += 1
@@ -160,7 +179,13 @@ def main() -> int:
         )
         if "git" in entry:
             kind, sha = classify_git(str(entry.get("revision", "")), entry["git"])
-            if kind == "floating-branch":
+            if kind == "cannot-verify":
+                unverified.append(
+                    f"{where} revision '{entry.get('revision')}' could not be "
+                    f"classified: {entry['git']} is unreachable from here "
+                    f"(cannot reach the remote => no verdict, exit 2)"
+                )
+            elif kind == "floating-branch":
                 problems.append(
                     f"R1 {where} uses branch '{entry['revision']}' "
                     f"(currently {sha[:9]}) -> pin a tag or a full commit sha"
@@ -236,7 +261,7 @@ def main() -> int:
                 continue
             kind, sha = classify_git(str(entry.get("revision", "")), entry["git"])
             if kind != "pinned-tag":
-                continue
+                continue  # cannot-verify never reaches here: it has no sha to compare
             match = [
                 e
                 for e in lock_entries
@@ -255,9 +280,18 @@ def main() -> int:
         f"checked {checked} declared dependencies in {os.path.relpath(pkg_path)} "
         f"({'with' if lock is not None else 'without'} package-lock.yml), "
         f"violations {len(problems)}"
+        + (f" (no verdict: {len(unverified)} unverifiable)" if unverified else "")
     )
     for note in skipped:
         print("  SKIP " + note)
+    for note in unverified:
+        print("  UNVERIFIED " + note)
+    if not problems and unverified:
+        print(
+            f"no verdict: {len(unverified)} ref(s) unverifiable because the remote is "
+            f"unreachable - re-run where github.com is reachable"
+        )
+        return 2
     for p in problems:
         print("  FAIL " + p)
     return 1 if problems else 0
